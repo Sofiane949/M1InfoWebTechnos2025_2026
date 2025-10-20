@@ -40,6 +40,12 @@ export default class WaveformDrawer {
         }
         return max;
     }
+
+    clear() {
+        let ctx = this.canvas.getContext('2d');
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
     // Fist parameter : where to start vertically in the canvas (useful when we draw several
     // waveforms in a single canvas)
     // Second parameter = height of the sample

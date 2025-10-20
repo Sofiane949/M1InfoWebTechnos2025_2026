@@ -6,6 +6,7 @@
 // default imports of classes from waveformdrawer.js and trimbarsdrawer.js
 import WaveformDrawer from './waveformdrawer.js';
 import TrimbarsDrawer from './trimbarsdrawer.js';
+import Sound from './sound.js';
 // "named" imports from utils.js and soundutils.js
 import { loadAndDecodeSound, playSound } from './soundutils.js';
 import { pixelToSeconds } from './utils.js';
@@ -13,9 +14,19 @@ import { pixelToSeconds } from './utils.js';
 // The AudioContext object is the main "entry point" into the Web Audio API
 let ctx;
 
-const soundURL =
-    'https://mainline.i3s.unice.fr/mooc/shoot2.mp3';
-let decodedSound;
+const soundURLs = [
+    'https://upload.wikimedia.org/wikipedia/commons/a/a3/Hardstyle_kick.wav',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c7/Redoblante_de_marcha.ogg/Redoblante_de_marcha.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c9/Hi-Hat_Cerrado.ogg/Hi-Hat_Cerrado.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/0/07/Hi-Hat_Abierto.ogg/Hi-Hat_Abierto.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3c/Tom_Agudo.ogg/Tom_Agudo.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a4/Tom_Medio.ogg/Tom_Medio.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/8/8d/Tom_Grave.ogg/Tom_Grave.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/6/68/Crash.ogg/Crash.ogg.mp3',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/2/24/Ride.ogg/Ride.ogg.mp3'
+]
+let decodedSounds;
+let decodedSoundsObj;
 
 let canvas, canvasOverlay;
 // waveform drawer is for drawing the waveform in the canvas
@@ -27,38 +38,97 @@ let mousePos = { x: 0, y: 0 }
 let playButton = document.querySelector("#playButton");
 // disable the button until the sound is loaded and decoded
 playButton.disabled = true;
+let currentSound;
 
 window.onload = async function init() {
     ctx = new AudioContext();
 
-    // two canvas : one for drawing the waveform, the other for the trim bars
     canvas = document.querySelector("#myCanvas");
     canvasOverlay = document.querySelector("#myCanvasOverlay");
 
-    // create the waveform drawer and the trimbars drawer
     waveformDrawer = new WaveformDrawer();
-    trimbarsDrawer = new TrimbarsDrawer(canvasOverlay, 100, 200);
+    trimbarsDrawer = new TrimbarsDrawer(canvasOverlay, 0, canvasOverlay.width);
 
-    // load and decode the sound
-    // this is asynchronous, we use await to wait for the end of the loading and decoding
-    // before going to the next instruction
-    // Note that we cannot use await outside an async function
-    // so we had to declare the init function as async
-    decodedSound = await loadAndDecodeSound(soundURL, ctx);
-    waveformDrawer.init(decodedSound, canvas, '#83E83E');
-    waveformDrawer.drawWave(0, canvas.height);
+    const response = await fetch("http://localhost:3000/api/presets");
+    const presets = await response.json();
 
-    // we enable the play sound button, now that the sound is loaded and decoded
-    playButton.disabled = false;
+    // Créer le menu déroulant pour les presets
+    const dropdown = document.createElement('select');
+    dropdown.id = 'presetDropdown';
+    document.body.appendChild(dropdown);
 
-    // Event listener for the button. When the button is pressed, we play the sound
-    playButton.onclick = function (evt) {
-        // get start and end time (in seconds) from trim bars position.x (in pixels)
-        let start = pixelToSeconds(trimbarsDrawer.leftTrimBar.x, decodedSound.duration, canvas.width);
-        let end = pixelToSeconds(trimbarsDrawer.rightTrimBar.x, decodedSound.duration, canvas.width);
-        console.log("start: " + start + " end: " + end);
-        // from utils.js
-        playSound(ctx, decodedSound, start, end);
+    // Remplir le menu déroulant avec les options des presets
+    presets.forEach((preset, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = preset.name;
+        dropdown.appendChild(option);
+    });
+
+    // Conteneur pour les boutons de sons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.id = 'soundButtons';
+    document.body.appendChild(buttonContainer);
+
+    // Fonction pour mettre à jour les boutons en fonction du preset sélectionné
+    async function updateSoundButtons(presetIndex) {
+        // Vider les boutons existants
+        buttonContainer.innerHTML = '';
+
+        // Remplir soundURLs à partir des samples du preset sélectionné
+        soundURLs.length = 0; // Vider le tableau
+        presets[presetIndex].samples.forEach(sample => {
+            soundURLs.push(sample.url);
+        });
+
+        // Charger et décoder les sons
+        decodedSounds = await Promise.all(soundURLs.map(url => loadAndDecodeSound(url, ctx)));
+        decodedSoundsObj = await Promise.all(decodedSounds.map(decodedSound => new Sound(decodedSound, canvasOverlay.width)));
+
+        // Définir le son initial
+        currentSound = decodedSoundsObj[0] || null;
+        if (currentSound) {
+            waveformDrawer.init(decodedSounds[0], canvas, '#83E83E');
+            waveformDrawer.drawWave(0, canvas.height);
+            playButton.disabled = false;
+        } else {
+            waveformDrawer.clear();
+            playButton.disabled = true;
+        }
+
+        // Créer des boutons pour chaque son du preset
+        decodedSounds.forEach((decodedSound, index) => {
+            const button = document.createElement('button');
+            button.textContent = presets[presetIndex].samples[index].name || `Son ${index + 1}`;
+            buttonContainer.appendChild(button);
+            button.onclick = function(evt) {
+                currentSound = decodedSoundsObj[index];
+                trimbarsDrawer.leftTrimBar.x = currentSound.leftTrimbarX;
+                trimbarsDrawer.rightTrimBar.x = currentSound.rightTrimbarX;
+                waveformDrawer.clear();
+                waveformDrawer.init(decodedSound, canvas, '#83E83E');
+                waveformDrawer.drawWave(0, canvas.height);
+                playButton.disabled = false;
+            };
+        });
+    }
+
+    // Initialiser avec le premier preset
+    await updateSoundButtons(0);
+
+    // Gérer l'événement de changement du menu déroulant
+    dropdown.onchange = async function(evt) {
+        const selectedPresetIndex = parseInt(evt.target.value, 10);
+        await updateSoundButtons(selectedPresetIndex);
+    };
+
+    // Logique du bouton de lecture
+    playButton.onclick = function(evt) {
+        if (currentSound) {
+            let start = pixelToSeconds(trimbarsDrawer.leftTrimBar.x, currentSound.decodedSound.duration, canvas.width);
+            let end = pixelToSeconds(trimbarsDrawer.rightTrimBar.x, currentSound.decodedSound.duration, canvas.width);
+            playSound(ctx, currentSound.decodedSound, start, end);
+        }
     };
 
 
@@ -88,6 +158,8 @@ window.onload = async function init() {
     canvasOverlay.onmouseup = (evt) => {
         // We stop dragging the trim bars (if they were being dragged)
         trimbarsDrawer.stopDrag();
+        currentSound.leftTrimbarX = trimbarsDrawer.leftTrimBar.x;
+        currentSound.rightTrimbarX = trimbarsDrawer.rightTrimBar.x;
     }
 
     // start the animation loop for drawing the trim bars
