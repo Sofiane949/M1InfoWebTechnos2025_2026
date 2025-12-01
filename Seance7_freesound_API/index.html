@@ -1,0 +1,30 @@
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Seance7_freesound_API</title>
+    <a href="css/styles.css" rel="stylesheet"></a>
+        <script type="module" src="js/script.js"></script>
+</head>
+<body>
+    <h1>Example of use of the freesound.org API</h1>
+    <p>You will need to get an API key to use that...</p>
+
+    <div id="explorer">
+				<div id="freesoundAPI">
+					<input type="text" id="apiKeyInput" name="apiKey" placeholder="Enter your freesound API key">
+					<button id="apiKeyButton">Set API key</button>
+				</div>
+				<div id="research">
+					<input type="text" id="search" name="search" placeholder="Freesound">
+					<select id="timeRange" class="researchClass"></select>
+					<button id="searchButton" class="researchClass">Search</button>
+					<button id="previousPage"><<</button>
+					<button id="nextPage">>></button>
+				</div>
+			
+				<div id="results">
+				</div>
+			</div>
+</body>
+</html>
